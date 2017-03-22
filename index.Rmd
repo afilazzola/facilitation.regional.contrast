@@ -43,7 +43,11 @@ cal = USA1[match(toupper(cal),toupper(USA1$NAME_1)),]
 ## Aridty calculated using Precipitation/Potential Evapotranspiration from Maliva, R., & Missimer, T. (2012). Aridity and drought. In Arid lands water evaluation and management (pp. 21-39). Springer Berlin Heidelberg.
 
 ## Online aridity dataset created by Zomer et al. 2007 & 2008 - http://www.cgiar-csi.org/data/global-aridity-and-pet-database
-# global.AR <- raster("rasters\\ai_yr\\ai_yr.adf")
+
+
+global.AR <- raster("global.AR.tif")
+
+
 ```
 
 ### extract aridity from ephedra locations in California
@@ -64,10 +68,8 @@ samplearea <- circles(gps, d=5000, lonlat=T)
 backgr <- spsample(samplearea@polygons, 1000, type='random', iter=99)
 
 ##extract aridity
-# aridity.data <- extract(global.AR, backgr)
-# write.table(aridity.data, "data\\global.AR.csv", sep=",")
-aridity.data <- read.table("data\\global.AR.csv", sep=",")
-aridity.data <- aridity.data[,1]
+aridity.data <- extract(global.AR, backgr)
+
 
 ## aridity gradient
 hist1 <- hist(subset(aridity.data, aridity.data<5000), breaks=20)
@@ -86,10 +88,7 @@ sites <- SpatialPoints(sites[,2:3])
 proj4string(sites) <- crs.world
 
 ## extract aridity of spatial points
-# aridity.sites <- extract(global.AR, sites)
-# write.table(aridity.sites, "data\\site.AR.csv", sep=",")
-aridity.sites <- read.csv("data\\site.AR.csv")
-aridity.sites<- aridity.sites[,1]
+aridity.sites <- extract(global.AR, sites)
 
 match.vals <- function(x) {which(abs(hist1$mids-x)==min(abs(hist1$mids-x)))} ## find the aridity values that are already used in the study
 covered <- unique(sapply(aridity.sites, match.vals))
@@ -107,11 +106,7 @@ legend(3700,100, c("unsampled","sampled"), pch=22, pt.bg=c(0,8))
 
 
 ## extract sites with unsampled aridity values
-# missing.eph <-  extract(global.AR, gps)
-# write.table(missing.eph, "data\\missing.eph.csv", sep=",")
-missing.eph <- read.csv("data\\missing.eph.csv")
-missing.eph <- missing.eph[,1]
-
+missing.eph <-  extract(global.AR, gps)
 
 missing.eph <- SpatialPointsDataFrame(coords=gps, data=data.frame(missing.eph))
 
