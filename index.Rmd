@@ -1,0 +1,136 @@
+---
+title: "index"
+author: "Alex Filazzola"
+date: "March 16, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE}
+library(raster)
+library(rgdal)
+library(dismo)
+library(rJava)
+library(maptools)
+library(rgeos)
+library(MASS)
+```
+
+### download species location
+```{r}
+
+# Genus <- "Ephedra"
+# temp <- gbif(Genus, geo=T) ## all ephedra individuals that have lat& long
+# temp <- subset(temp, country=="United States") ## all ephedra instances in the US
+# temp<-na.omit(temp[,c("lon","lat","species")]) ## extract lat long and species name. Complete cases only
+# temp <- temp[!duplicated(temp), ] ## remove duplicates
+# write.csv(temp, "ephedra.locations.USA.csv")
+ephedra <- read.csv("data\\ephedra.locations.USA.csv")
+
+## get USA boundaries
+USA1 <- getData('GADM' , country="USA", level=1)# use state bounds from gadm website:
+## get California outline
+cal<- c("California") ## extract states (need to uppercase everything)
+cal = USA1[match(toupper(cal),toupper(USA1$NAME_1)),]
+```
+
+###download aridity index raster
+```{r}
+
+## Aridty calculated using Precipitation/Potential Evapotranspiration from Maliva, R., & Missimer, T. (2012). Aridity and drought. In Arid lands water evaluation and management (pp. 21-39). Springer Berlin Heidelberg.
+
+## Online aridity dataset created by Zomer et al. 2007 & 2008 - http://www.cgiar-csi.org/data/global-aridity-and-pet-database
+# global.AR <- raster("rasters\\ai_yr\\ai_yr.adf")
+```
+
+### extract aridity from ephedra locations in California
+```{r}
+
+## convert facilitated occurrence into spatial points
+gps <- ephedra[,2:3]
+crs.world <-CRS("+proj=longlat +datum=WGS84")
+coordinates(gps) <- ~lon+lat
+proj4string(gps) <- crs.world
+
+##crop out points to California only
+gps <- crop(gps, extent(cal))
+samplearea <- circles(gps, d=5000, lonlat=T)
+
+
+## sample points
+backgr <- spsample(samplearea@polygons, 1000, type='random', iter=99)
+
+##extract aridity
+# aridity.data <- extract(global.AR, backgr)
+# write.table(aridity.data, "data\\global.AR.csv", sep=",")
+aridity.data <- read.table("data\\global.AR.csv", sep=",")
+aridity.data <- aridity.data[,1]
+
+## aridity gradient
+hist1 <- hist(subset(aridity.data, aridity.data<5000), breaks=20)
+
+```
+### site aridity 
+
+```{r}
+site.names <- c("Panoche","Cuyama","Barstow","MojavePreserve","SheepholeValley","Tecopa","TejonRanch")
+site.lat <- c(36.70000998,34.85521998,35.094051,34.698199,34.205676,35.85151504,34.875994)
+site.lon <- c(-120.801116,-119.48851,-116.8349,-115.684169,-115.719676,-116.186706,-118.60246)
+
+## turn sites into spatial points
+sites <- data.frame(site.names,site.lon,site.lat)
+sites <- SpatialPoints(sites[,2:3])
+proj4string(sites) <- crs.world
+
+## extract aridity of spatial points
+# aridity.sites <- extract(global.AR, sites)
+# write.table(aridity.sites, "data\\site.AR.csv", sep=",")
+aridity.sites <- read.csv("data\\site.AR.csv")
+aridity.sites<- aridity.sites[,1]
+
+match.vals <- function(x) {which(abs(hist1$mids-x)==min(abs(hist1$mids-x)))} ## find the aridity values that are already used in the study
+covered <- unique(sapply(aridity.sites, match.vals))
+test <- hist1$mids[covered]## aridity values that are currently being used
+colours <- match(hist1$breaks,test+100)
+colours <- ifelse(is.na(colours),0,8)
+
+hist1 <- hist(subset(aridity.data, aridity.data<5000), breaks=20, col=colours, main="", xlab="aridity")
+legend(3700,100, c("unsampled","sampled"), pch=22, pt.bg=c(0,8))
+
+```
+
+### identify areas that are missing
+```{r}
+
+
+## extract sites with unsampled aridity values
+# missing.eph <-  extract(global.AR, gps)
+# write.table(missing.eph, "data\\missing.eph.csv", sep=",")
+missing.eph <- read.csv("data\\missing.eph.csv")
+missing.eph <- missing.eph[,1]
+
+
+missing.eph <- SpatialPointsDataFrame(coords=gps, data=data.frame(missing.eph))
+
+missing.vals <- data.frame(aridity=c(hist1$breaks),colours)
+missing.vals[missing.vals$colours==0,"aridity"]
+```
+
+```{r warning=FALSE, message=FALSE}
+library("leaflet")
+
+plot.ranges <- function(x1,x2){
+new.points <- subset(missing.eph, missing.eph>x1 & missing.eph<x2)
+(m <- leaflet() %>% addTiles())
+(m %>% setView(lng = -118, lat = 35, zoom = 6)  %>%   addMarkers(new.points, lng=new.points@coords[,1],lat=new.points@coords[,2], popup=new.points$missing.eph, label=as.character(new.points$missing.eph)))
+}
+
+plot.ranges(1400,1600)
+plot.ranges(1600,1800)
+plot.ranges(1800,2000)
+plot.ranges(2000,2200)
+plot.ranges(2200,2400)
+plot.ranges(2400,2600)
