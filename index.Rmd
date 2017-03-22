@@ -1,9 +1,21 @@
 ---
-title: "index"
+title:
 author: "Alex Filazzola"
-date: "March 16, 2017"
-output: html_document
+date: "March 2017"
+output:
+  html_document:
+    theme: yeti
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
 ---
+## A regional contrast of shrub-annual facilitation in deserts
+Positive plant interactions are common in high ecosystems that are resource limited and have high abiotic stress such as deserts. Shrubs commonly facilitate annual plants by providing favourable microclimatic conditions and reducing herbivory. It is expected that the strength and mechanism of these positive shrub-annual interactions will change with aridity in desert ecosystems. Thus, a large scale experiment is needed to determine how desert shrubs influence annual biodiversity along a regional gradient of precipitation.
+
+![](./ephedra.landscape.JPG)
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -21,14 +33,13 @@ library(MASS)
 
 ### download species location
 ```{r}
+source("rscripts\\gbif.occurences.r")
+# species.occ("Ephedra")
+# species.occ("Larrea","tridentata")
 
-# Genus <- "Ephedra"
-# temp <- gbif(Genus, geo=T) ## all ephedra individuals that have lat& long
-# temp <- subset(temp, country=="United States") ## all ephedra instances in the US
-# temp<-na.omit(temp[,c("lon","lat","species")]) ## extract lat long and species name. Complete cases only
-# temp <- temp[!duplicated(temp), ] ## remove duplicates
-# write.csv(temp, "ephedra.locations.USA.csv")
-ephedra <- read.csv("data\\ephedra.locations.USA.csv")
+ephedra <- read.csv("data\\Ephedra.csv")
+larrea <- read.csv("data\\Larrea.tridentata.csv")
+
 
 ## get USA boundaries
 USA1 <- getData('GADM' , country="USA", level=1)# use state bounds from gadm website:
@@ -39,14 +50,10 @@ cal = USA1[match(toupper(cal),toupper(USA1$NAME_1)),]
 
 ###download aridity index raster
 ```{r}
-
 ## Aridty calculated using Precipitation/Potential Evapotranspiration from Maliva, R., & Missimer, T. (2012). Aridity and drought. In Arid lands water evaluation and management (pp. 21-39). Springer Berlin Heidelberg.
 
 ## Online aridity dataset created by Zomer et al. 2007 & 2008 - http://www.cgiar-csi.org/data/global-aridity-and-pet-database
-
-
 global.AR <- raster("global.AR.tif")
-
 
 ```
 
@@ -68,14 +75,14 @@ samplearea <- circles(gps, d=5000, lonlat=T)
 backgr <- spsample(samplearea@polygons, 1000, type='random', iter=99)
 
 ##extract aridity
-aridity.data <- extract(global.AR, backgr)
+aridity.ephedra <- extract(global.AR, backgr)
 
 
 ## aridity gradient
-hist1 <- hist(subset(aridity.data, aridity.data<5000), breaks=20)
+hist1 <- hist(subset(aridity.ephedra, aridity.ephedra<5000), breaks=20, main="", xlab="Aridity for Ephedra locations")
 
 ```
-### site aridity 
+### Ephedra site aridity 
 
 ```{r}
 site.names <- c("Panoche","Cuyama","Barstow","MojavePreserve","SheepholeValley","Tecopa","TejonRanch")
@@ -88,27 +95,96 @@ sites <- SpatialPoints(sites[,2:3])
 proj4string(sites) <- crs.world
 
 ## extract aridity of spatial points
-aridity.sites <- extract(global.AR, sites)
+aridity.eph.samp <- extract(global.AR, sites)
 
 match.vals <- function(x) {which(abs(hist1$mids-x)==min(abs(hist1$mids-x)))} ## find the aridity values that are already used in the study
-covered <- unique(sapply(aridity.sites, match.vals))
+covered <- unique(sapply(aridity.eph.samp, match.vals))
 test <- hist1$mids[covered]## aridity values that are currently being used
 colours <- match(hist1$breaks,test+100)
 colours <- ifelse(is.na(colours),0,8)
 
-hist1 <- hist(subset(aridity.data, aridity.data<5000), breaks=20, col=colours, main="", xlab="aridity")
+hist1 <- hist(subset(aridity.ephedra, aridity.ephedra<5000), breaks=20, col=colours, main="", xlab="Aridity for Ephedra locations")
 legend(3700,100, c("unsampled","sampled"), pch=22, pt.bg=c(0,8))
 
+## missing values
+hist1$breaks[colours==0]
 ```
 
-### identify areas that are missing
+### Larrea  site aridity 
+```{r echo=FALSE}
+## convert facilitated occurrence into spatial points
+gps <- larrea[,2:3]
+crs.world <-CRS("+proj=longlat +datum=WGS84")
+coordinates(gps) <- ~lon+lat
+proj4string(gps) <- crs.world
+
+##crop out points to California only
+gps <- crop(gps, extent(cal))
+samplearea <- circles(gps, d=5000, lonlat=T)
+
+## sample points
+backgr <- spsample(samplearea@polygons, 1000, type='random', iter=99)
+
+##extract aridity
+aridity.larrea <- extract(global.AR, backgr)
+
+
+## aridity gradient
+hist1 <- hist(subset(aridity.larrea, aridity.larrea<5000), breaks=20, main="", xlab="Aridity for Larrea locations")
+
+
+## current Larrea sites 
+site.names <- c("kelbaker1","kelbaker2","kelbaker3","kelbaker4","kelbaker5")
+site.lat <- c(35.35,35.35,35.28,35.26,35.235)
+site.lon <- c(-116.0333333,-115.9166667,-115.85,-115.7833333,-115.7166667)
+
+## turn sites into spatial points
+sites <- data.frame(site.names,site.lon,site.lat)
+sites <- SpatialPoints(sites[,2:3])
+proj4string(sites) <- crs.world
+
+## extract aridity of spatial points
+aridity.larrea.samp <- extract(global.AR, sites)
+
+match.vals <- function(x) {which(abs(hist1$mids-x)==min(abs(hist1$mids-x)))} ## find the aridity values that are already used in the study
+covered <- unique(sapply(aridity.larrea.samp, match.vals))
+test <- hist1$mids[covered]## aridity values that are currently being used
+colours <- match(hist1$breaks,test+100)
+colours <- ifelse(is.na(colours),0,8)
+
+hist2 <- hist(subset(aridity.larrea, aridity.larrea<5000), breaks=20, col=colours, main="", xlab="aridity")
+legend(3700,100, c("unsampled","sampled"), pch=22, pt.bg=c(0,8))
+
+## missing values
+hist2$breaks[colours==0]
+```
+
+### adding new sites
 ```{r}
+
+source("rscripts//identify.new.sites.r")
+
+##ephedra example
+lon <- c(-120.51,-117.51)
+lat <- c(36.5231,35.684)
+new.eph <- data.frame(lon,lat)
+
+## function to create new histogram and output
+new.sites(new.eph, "Larrea")
+```
+
+### identify ephedra potential sites
+```{r}
+## convert facilitated occurrence into spatial points
+eph <- ephedra[,2:3]
+coordinates(eph) <- ~lon+lat
+proj4string(eph) <- crs.world
+eph <- crop(eph, extent(cal))
 
 
 ## extract sites with unsampled aridity values
-missing.eph <-  extract(global.AR, gps)
-
-missing.eph <- SpatialPointsDataFrame(coords=gps, data=data.frame(missing.eph))
+missing.eph <-  extract(global.AR, eph)
+missing.eph <- SpatialPointsDataFrame(coords=eph, data=data.frame(missing.eph))
 
 missing.vals <- data.frame(aridity=c(hist1$breaks),colours)
 missing.vals[missing.vals$colours==0,"aridity"]
